@@ -1,9 +1,16 @@
-function FreePrecessionStatisticalSensitivity_ffactorLoss
+function FreePrecessionStatisticalSensitivity_MultiVarying_CB01
 %--- Calculating statistical impact of SNS nEDM experiment for f-factor and f-factor w peak patch loss model instead of single tau
 clc; set(0,'defaultTextInterpreter','latex'); set(groot, 'defaultAxesTickLabelInterpreter','latex'); set(groot, 'DefaultLegendInterpreter', 'latex'); set(gcf,'units','centimeters'); linecolors = lines(20); set(0,'DefaultAxesFontSize', 14); set(0,'DefaultTextFontSize', 14);
 %warning('on','all');
 warning('off','all');
 global plotsOn; plotsOn = 0;
+
+%--- variable parameter settings
+dcymdl_s = 1;     % decay model setting -- 1==single exponential -- 2==double exponential
+phi0_s = 0;       % phi0 setting -- 0==fixed -- 1 == free
+tauWalls_s = 0;   % tau_walls setting -- 0==single loss -- 1==energy dependent
+weakPatch_s = 0;  % weak_patch setting -- 0==weak patch off -- 1==weak patch on
+fWalls = 1.0e-5;     % f_walls setting 
 
 %--- variable operating parameters
 % tau_n3_scan = 400:100:700; %average for unpolarized n
@@ -19,7 +26,6 @@ VCell = 40.0*10.1*7.6; %[cm^3]
 AWalls = 10.1*7.6*2+40.0*7.6*2+40.0*10.1*2; %[cm^2]
 VoptWalls = 160; %[neV]
 %VoptWalls = 200; %[neV]
-fWalls = 1.8e-5; %[unitless] CHANGE HERE
 
 fpatch = 5e-5; %[unitless]
 Upatch = 80; %[neV]
@@ -64,7 +70,12 @@ gamma_n = 1.83247172e8; %s^-1*T^-1 or 18.32472 [Hz/mG] * 1E3 [mG/G] * 1E4 [G/T]
 gamma_3 = 2.037894659e8; %s^-1*T^-1  [CODATA]
 omega3n = (gamma_3-gamma_n)*B0;
 f3n = omega3n/(2*pi);
-phi0 = 30*pi/180;
+
+if phi0_s==0;
+    phi0 = 30*pi/180;
+else;
+    phi0 = random()*pi/180;
+end;
 
 t_width = 20E-3; %[s]
 
@@ -113,50 +124,35 @@ for i = 1:length(tau_n3_scan)
             end
             
             %---- single exponential fit
-            disp('Single-exponential:')
-            FIDsignal = @(p,t) p(1).*exp(-t./p(2)).*(p(3)+p(4)*(1-p(5)*cos(2*pi*p(6)*t + phi0)))+ abs(p(7));
-            beta0 = [Nt(1)*t_width 1/(1/tau_n3+1/880+1/2000) epsbeta/tau_beta eps3/tau_n3 P3*Pn f3n BG*t_width];
-            FIDsignal = @(p,t) p(1).*exp(-t./p(2)).*(p(3)+p(4)*(1-p(5)*cos(2*pi*p(6)*t + p(8))))+ abs(p(7));
-            beta0 = [Nt(1)*t_width 1/(1/tau_n3+1/880+1/2000) epsbeta/tau_beta eps3/tau_n3 P3*Pn f3n BG*t_width 30*pi/180];
-            
-            [betaBest1,errBest1,chi2_1,betaBest2,errBest2,chi2_2,chi2_3] = recursiveLeastSquaresFitting(t,data,FIDsignal,beta0,dataErr);
-            sigma_f = errBest2(6);
-            diff_f_RLS = f3n - betaBest2(6);
-            sigma_f_RLS_SingleExp(i) = sigma_f;
-            diff_f_RLS_SingleExp(i) = diff_f_RLS;
-            disp([num2str(tau_n3) ', ' num2str(Tm) ', ' num2str(Tf) ', ' num2str(sigma_f,'%8.2e') ', ' num2str(diff_f_RLS,'%8.2e') ', ' num2str(chi2_3,'%8.4f') ', ' num2str(finalSensitivity(sigma_f,Tm,Tf,Td,Efield),'%8.2e')]);
-            
-            %---- log likelihood (Poisson Nonlinear Regression)
-            %mynegloglik = @(beta) -sum(log(poisspdf(data,FIDsignal(beta,t))));
-            %opts = optimset('fminsearch');
-            %opts.MaxFunEvals = Inf;
-            %opts.MaxIter = 10000;
-            %betaHatML = fminsearch(mynegloglik,beta0,opts);
-            %disp('Poisson Nonlinear regression:')
-            %disp(['Coeff  =  ' num2str(betaHatML,'%0.8e  ')])
-            %diff_f_ML(i) = f3n - betaHatML(6)
-            
-            %MLEnegloglik = @(params,d,cens,freq) -sum(data.*log(FIDsignal(params,t))-FIDsignal(params,t));
-            %MLEnegloglik(beta0,data);
-            %options = statset('MaxIter',10000, 'MaxFunEvals',Inf);
-            %[phat pci] = mle(data,'nloglf',MLEnegloglik,'start',beta0,'alpha',0.37,'options',options);
-            %disp('MLE Poisson Nonlinear regression:')
-            %disp(['Coeff  =  ' num2str(phat,'%0.8e  ')])
-            %disp(['Low    =  ' num2str(pci(1,:),'%0.8e  ')])
-            %disp(['High   =  ' num2str(pci(2,:),'%0.8e  ')])
-            
+            if dcymdl_s==1;
+                disp('Single-exponential:')
+                FIDsignal = @(p,t) p(1).*exp(-t./p(2)).*(p(3)+p(4)*(1-p(5)*cos(2*pi*p(6)*t + phi0)))+ abs(p(7));
+                beta0 = [Nt(1)*t_width 1/(1/tau_n3+1/880+1/2000) epsbeta/tau_beta eps3/tau_n3 P3*Pn f3n BG*t_width];
+                FIDsignal = @(p,t) p(1).*exp(-t./p(2)).*(p(3)+p(4)*(1-p(5)*cos(2*pi*p(6)*t + p(8))))+ abs(p(7));
+                beta0 = [Nt(1)*t_width 1/(1/tau_n3+1/880+1/2000) epsbeta/tau_beta eps3/tau_n3 P3*Pn f3n BG*t_width 30*pi/180];
+                 [betaBest1,errBest1,chi2_1,betaBest2,errBest2,chi2_2,chi2_3] = recursiveLeastSquaresFitting(t,data,FIDsignal,beta0,dataErr);
+                sigma_f = errBest2(6);
+                diff_f_RLS = f3n - betaBest2(6);
+                sigma_f_RLS_SingleExp(i) = sigma_f;
+                diff_f_RLS_SingleExp(i) = diff_f_RLS;
+                disp([num2str(tau_n3) ', ' num2str(Tm) ', ' num2str(Tf) ', ' num2str(sigma_f,'%8.2e') ', ' num2str(diff_f_RLS,'%8.2e') ', ' num2str(chi2_3,'%8.4f') ', ' num2str(finalSensitivity(sigma_f,Tm,Tf,Td,Efield),'%8.2e')]);
+          
             %--- double exponential decay fit
-%             disp('Double-exponential: all 4 parameters free')
-%             FIDsignal = @(p,t) (abs(p(1)).*exp(-t./abs(p(2)))+abs(p(3)).*exp(-t./abs(p(4)))).*(abs(p(5))+abs(p(6))*(1-abs(p(7))*cos(2*pi*abs(p(8))*t + phi0)))+abs(p(9));
-%             beta0 = [0.5*Nt(1)*t_width 1/(1/tau_n3+1/880+1/2000) 0.5*Nt(1)*t_width 1/(1/tau_n3+1/880+1/200) epsbeta/tau_beta eps3/tau_n3 P3*Pn f3n BG*t_width];
-%             warning('off','all');
-%             [betaBest1,errBest1,chi2_1,betaBest2,errBest2,chi2_2,chi2_3] = recursiveLeastSquaresFitting(t,data,FIDsignal,beta0,dataErr);
-%             sigma_f = errBest2(8);
-%             diff_f_RLS = f3n - betaBest2(8);
-%             sigma_f_RLS_DblExp4ParamsFree(i) = sigma_f;
-%             diff_f_RLS_DblExp4ParamsFree(i) = diff_f_RLS;
-%             disp([num2str(tau_n3) ', ' num2str(Tm) ', ' num2str(Tf) ', ' num2str(sigma_f,'%8.2e') ', ' num2str(diff_f_RLS,'%8.2e') ', ' num2str(chi2_3,'%8.4f') ', ' num2str(finalSensitivity(sigma_f,Tm,Tf,Td,Efield),'%8.2e')]);
-%            
+            elif dcymdl_s==2;
+                disp('Double-exponential: all 4 parameters free')
+                FIDsignal = @(p,t) (abs(p(1)).*exp(-t./abs(p(2)))+abs(p(3)).*exp(-t./abs(p(4)))).*(abs(p(5))+abs(p(6))*(1-abs(p(7))*cos(2*pi*abs(p(8))*t + phi0)))+abs(p(9));   
+                beta0 = [0.5*Nt(1)*t_width 1/(1/tau_n3+1/880+1/2000) 0.5*Nt(1)*t_width 1/(1/tau_n3+1/880+1/200) epsbeta/tau_beta eps3/tau_n3 P3*Pn f3n BG*t_width];
+                warning('off','all');
+                [betaBest1,errBest1,chi2_1,betaBest2,errBest2,chi2_2,chi2_3] = recursiveLeastSquaresFitting(t,data,FIDsignal,beta0,dataErr);
+                sigma_f = errBest2(8);
+                diff_f_RLS = f3n - betaBest2(8);
+                sigma_f_RLS_DblExp4ParamsFree(i) = sigma_f;
+                diff_f_RLS_DblExp4ParamsFree(i) = diff_f_RLS;
+                disp([num2str(tau_n3) ', ' num2str(Tm) ', ' num2str(Tf) ', ' num2str(sigma_f,'%8.2e') ', ' num2str(diff_f_RLS,'%8.2e') ', ' num2str(chi2_3,'%8.4f') ', ' num2str(finalSensitivity(sigma_f,Tm,Tf,Td,Efield),'%8.2e')]);
+           else
+                quit
+           end
+           
             %--- for double exponential decay fit - smoothing first - fix all 4 double exp parameters
 %             disp('Double-exponential: smooth first, fixed all 4 double exponential parameters:')
 %             DE = smoothDataAndDoubleExpFit(t,data,tau_n3);
@@ -168,7 +164,25 @@ for i = 1:length(tau_n3_scan)
 %             sigma_f_RLS_SmoothFix4ExpParams(i) = sigma_f;
 %             diff_f_RLS_SmoothFix4ExpParams(i) = diff_f_RLS;       
 %             disp([num2str(tau_n3) ', ' num2str(Tm) ', ' num2str(Tf) ', ' num2str(sigma_f,'%8.2e') ', ' num2str(diff_f_RLS,'%8.2e') ', ' num2str(chi2_3,'%8.4f') ', ' num2str(finalSensitivity(sigma_f,Tm,Tf,Td,Efield),'%8.2e')]);
-%            
+                      
+            %---- log likelihood (Poisson Nonlinear Regression)
+            mynegloglik = @(beta) -sum(log(poisspdf(data,FIDsignal(beta,t))));
+            opts = optimset('fminsearch');
+            opts.MaxFunEvals = Inf;
+            opts.MaxIter = 10000;
+            betaHatML = fminsearch(mynegloglik,beta0,opts);
+            %disp('Poisson Nonlinear regression:')
+            %disp(['Coeff  =  ' num2str(betaHatML,'%0.8e  ')])
+            diff_f_ML(i) = f3n - betaHatML(6)
+            
+            %MLEnegloglik = @(params,d,cens,freq) -sum(data.*log(FIDsignal(params,t))-FIDsignal(params,t));
+            %MLEnegloglik(beta0,data);
+            %options = statset('MaxIter',10000, 'MaxFunEvals',Inf);
+            %[phat pci] = mle(data,'nloglf',MLEnegloglik,'start',beta0,'alpha',0.37,'options',options);
+            %disp('MLE Poisson Nonlinear regression:')
+            %disp(['Coeff  =  ' num2str(phat,'%0.8e  ')])
+            %disp(['Low    =  ' num2str(pci(1,:),'%0.8e  ')])
+            %disp(['High   =  ' num2str(pci(2,:),'%0.8e  ')])        
             
             %--- for double exponential decay fit - smoothing first - fix all 2 double exp parameters
             %disp('Double-exponential: smooth first, fixed 2 x time constants, leave free 2x amplitudes: \n')
@@ -297,7 +311,7 @@ end
 function finalizePlots()
 
 figure(1);
-%pos = get(gcf,'Position'); set(gcf,'PaperPositionMode','Auto','PaperSize',[pos(3), pos(4)])
+pos = get(gcf,'Position'); set(gcf,'PaperPositionMode','Auto','PaperSize',[pos(3), pos(4)])
 %print(gcf,'./figure1.pdf','-dpdf','-r0')
 %pdfcrop('./figure1.pdf')
 
