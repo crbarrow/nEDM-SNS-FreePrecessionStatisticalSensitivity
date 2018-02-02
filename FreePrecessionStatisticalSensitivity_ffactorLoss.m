@@ -77,7 +77,7 @@ for i = 1:10
     for j = 1:length(Tm_scan)
         for k = 1:length(Tf_scan)
             
-            tau_n3 = tau_n3_scan(i);
+            tau_n3 = tau_n3_scan(1);
             Tm = Tm_scan(j);
             Tf = Tf_scan(k);
             
