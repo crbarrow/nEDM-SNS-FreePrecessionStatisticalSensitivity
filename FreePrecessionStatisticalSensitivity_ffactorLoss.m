@@ -35,7 +35,7 @@ v = sqrt(2*E*1E-9*1.6e-19/1.67e-27); %[m/s]
 n_v = v.^2;
 n_E = sqrt(E);
 n_E = n_E/max(n_E);
-
+ 
 mubarWalls = 2*fWalls*(VoptWalls./E.*asin(sqrt(E/VoptWalls))-sqrt(VoptWalls./E-1));
 mubarWalls(E/VoptWalls>1)=1;
 tau_walls = 4*VCell*1e-6./(mubarWalls.*v*AWalls*1e-4);
