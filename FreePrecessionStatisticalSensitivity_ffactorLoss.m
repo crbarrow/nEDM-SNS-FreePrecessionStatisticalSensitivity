@@ -5,6 +5,20 @@ clc; set(0,'defaultTextInterpreter','latex'); set(groot, 'defaultAxesTickLabelIn
 warning('off','all');
 global plotsOn; plotsOn = 0;
 
+% Test Variable Tree
+ % ---- single exponential vs double exponential
+  % ---- phi0 fixed vs phi0 free
+   % ---- Tau_walls single valued vs Tau_walls (E) dependent
+    % ---- f_walls = 1e-5 vs 2e-5
+     % ---- w/ weak_patch vs w/o weak_patch
+     
+%---- Test Variable Settings
+expFit_s = 1 % exponential fitting parameter -- 1==single ; 2==double
+phi0_s = 1 % phi0 parameter -- 0==free ; 1==fixed value
+tau_walls_s = 0 % Tau_walls parameter -- 0==(E)dependent ; 1==single valued
+f_walls_s = 1 % f_walls parameter -- 1==1.0e-5 ; 2==2.0e-5
+patch_s = 0 % weak_patch parameter -- 0==no patch ; 1==patch considered
+
 %--- variable operating parameters
 % tau_n3_scan = 400:100:700; %average for unpolarized n
 % Tm_scan = 700:100:1300; %[s] measurement time
@@ -19,7 +33,7 @@ VCell = 40.0*10.1*7.6; %[cm^3]
 AWalls = 10.1*7.6*2+40.0*7.6*2+40.0*10.1*2; %[cm^2]
 VoptWalls = 160; %[neV]
 %VoptWalls = 200; %[neV]
-fWalls = 1.8e-5; %[unitless] CHANGE HERE
+fWalls = f_walls_s*e-5
 
 fpatch = 5e-5; %[unitless]
 Upatch = 80; %[neV]
@@ -38,7 +52,11 @@ n_E = n_E/max(n_E);
  
 mubarWalls = 2*fWalls*(VoptWalls./E.*asin(sqrt(E/VoptWalls))-sqrt(VoptWalls./E-1));
 mubarWalls(E/VoptWalls>1)=1;
-tau_walls = 4*VCell*1e-6./(mubarWalls.*v*AWalls*1e-4);
+if tau_walls_s==0
+   tau_walls = 4*VCell*1e-6./(mubarWalls.*v*AWalls*1e-4);
+else
+   tau_walls = ; %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% NEED VALUE
+
 mubarPatch = 2*fpatch*(Upatch./E.*asin(sqrt(E/Upatch))-sqrt(Upatch./E-1));
 mubarPatch(E/Upatch>1)=1;
 tau_patch = 4*VCell*1e-6./(mubarPatch.*v*Apatch*1e-4);
@@ -64,7 +82,10 @@ gamma_n = 1.83247172e8; %s^-1*T^-1 or 18.32472 [Hz/mG] * 1E3 [mG/G] * 1E4 [G/T]
 gamma_3 = 2.037894659e8; %s^-1*T^-1  [CODATA]
 omega3n = (gamma_3-gamma_n)*B0;
 f3n = omega3n/(2*pi);
-phi0 = 30*pi/180;
+if phi0_s==1
+   phi0 = 30*pi/180;
+else
+   phi0 = rand*pi/180;
 
 t_width = 20E-3; %[s]
 
