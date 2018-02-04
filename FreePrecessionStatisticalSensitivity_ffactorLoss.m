@@ -1,4 +1,4 @@
-function CBarrow_FrPrecStatSens_orig
+function CBarrow_FrPrecStatSens_VarsLoops01
 %--- Calculating statistical impact of SNS nEDM experiment for f-factor and f-factor w peak patch loss model instead of single tau
 clc; set(0,'defaultTextInterpreter','latex'); set(groot, 'defaultAxesTickLabelInterpreter','latex'); set(groot, 'DefaultLegendInterpreter', 'latex'); set(gcf,'units','centimeters'); linecolors = lines(20); set(0,'DefaultAxesFontSize', 14); set(0,'DefaultTextFontSize', 14);
 %warning('on','all');
@@ -13,11 +13,11 @@ global plotsOn; plotsOn = 0;
      % ---- w/ weak_patch vs w/o weak_patch
      
 %---- Test Variable Settings
-expFit_s = 1 % exponential fitting parameter -- 1==single ; 2==double
-phi0_s = 1 % phi0 parameter -- 0==free ; 1==fixed value
-tau_walls_s = 0 % Tau_walls parameter -- 0==(E)dependent ; 1==single valued
-f_walls_s = 1 % f_walls parameter -- 1==1.0e-5 ; 2==2.0e-5
-patch_s = 0 % weak_patch parameter -- 0==no patch ; 1==patch considered
+expFit_s = 1;    % exponential fitting parameter -- 1==single ; 2==double
+phi0_s = 1;      % phi0 parameter -- 0==free ; 1==fixed value
+tau_walls_s = 0; % Tau_walls parameter -- 0==(E)dependent ; 1==single valued
+f_walls_s = 1;   % f_walls parameter -- 1==1.0e-5 ; 2==2.0e-5
+patch_s = 0;     % weak_patch parameter -- 0==no patch ; 1==patch considered
 
 %--- variable operating parameters
 % tau_n3_scan = 400:100:700; %average for unpolarized n
@@ -33,7 +33,7 @@ VCell = 40.0*10.1*7.6; %[cm^3]
 AWalls = 10.1*7.6*2+40.0*7.6*2+40.0*10.1*2; %[cm^2]
 VoptWalls = 160; %[neV]
 %VoptWalls = 200; %[neV]
-fWalls = f_walls_s*e-5
+fWalls = f_walls_s*10e-5;
 
 fpatch = 5e-5; %[unitless]
 Upatch = 80; %[neV]
@@ -53,9 +53,14 @@ n_E = n_E/max(n_E);
 mubarWalls = 2*fWalls*(VoptWalls./E.*asin(sqrt(E/VoptWalls))-sqrt(VoptWalls./E-1));
 mubarWalls(E/VoptWalls>1)=1;
 if tau_walls_s==0
-   tau_walls = 4*VCell*1e-6./(mubarWalls.*v*AWalls*1e-4);
+    if patch_s==0
+        tau_walls = 4*VCell*1e-6./(mubarWalls.*v*AWalls*1e-4);
+    else
+        tau_walls = 1./(1./tau_walls+1./tau_patch);
+    end
 else
-   tau_walls = ; %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% NEED VALUE
+   tau_walls = 2000*ones(size(v)); %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% CHECK VALUE
+end
 
 mubarPatch = 2*fpatch*(Upatch./E.*asin(sqrt(E/Upatch))-sqrt(Upatch./E-1));
 mubarPatch(E/Upatch>1)=1;
@@ -86,6 +91,7 @@ if phi0_s==1
    phi0 = 30*pi/180;
 else
    phi0 = rand*pi/180;
+end
 
 t_width = 20E-3; %[s]
 
@@ -94,7 +100,7 @@ t_width = 20E-3; %[s]
 %plot(E,n_E,'Color',linecolors(2,:));
 
 tic
-for i = 1:10
+for i = 1
     for j = 1:length(Tm_scan)
         for k = 1:length(Tf_scan)
             
