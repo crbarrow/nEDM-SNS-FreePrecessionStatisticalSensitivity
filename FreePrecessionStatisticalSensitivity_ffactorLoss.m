@@ -1,4 +1,4 @@
-function CBarrow_FrPrecStatSens_VarsLoops01
+function CBarrow_FrPrecStatSens_Diff_fLoops01
 %--- Calculating statistical impact of SNS nEDM experiment for f-factor and f-factor w peak patch loss model instead of single tau
 clc; set(0,'defaultTextInterpreter','latex'); set(groot, 'defaultAxesTickLabelInterpreter','latex'); set(groot, 'DefaultLegendInterpreter', 'latex'); set(gcf,'units','centimeters'); linecolors = lines(20); set(0,'DefaultAxesFontSize', 14); set(0,'DefaultTextFontSize', 14);
 %warning('on','all');
@@ -99,8 +99,10 @@ t_width = 20E-3; %[s]
 %figure(1);
 %plot(E,n_E,'Color',linecolors(2,:));
 
+numLoops = 10;
+
 tic
-for i = 1
+for i = 1:numLoops
     for j = 1:length(Tm_scan)
         for k = 1:length(Tf_scan)
             
@@ -223,7 +225,47 @@ for i = 1
     D_f_RLS(i) = diff_f_RLS_SingleExp(i);  % populates array of frequency difference (Recursive Least Squares)
     D_f_MLE(i) = diff_f_ML(i);  % populates array of frequency difference (MLE with Poisson distribution)
 end
-D_f_LS,D_f_RLS,D_f_MLE
+D_f_LS,D_f_RLS,D_f_MLE;
+Diffs = [transpose(D_f_LS),transpose(D_f_RLS),transpose(D_f_MLE)]
+
+% ---- save data - 3 arrays of diffs - LS vs RLS vs MLE - sized by number
+%      of loops, i
+
+filename = 'diffs';
+if expFit_s==1      % exponential fitting parameter -- 1==single ; 2==double
+    filename = strcat(filename,'_Ex1');
+else
+    filename = strcat(filename,'_Ex2');
+end
+
+if phi0_s==1;      % phi0 parameter -- 0==free ; 1==fixed value
+    filename = strcat(filename,'_Ph1');
+else
+    filename = strcat(filename,'_Ph0');
+end
+
+if tau_walls_s==0; % Tau_walls parameter -- 0==(E)dependent ; 1==single valued
+    filename = strcat(filename,'_Tw0');
+else
+    filename = strcat(filename,'_Tw1');
+end
+
+if f_walls_s==1;   % f_walls parameter -- 1==1.0e-5 ; 2==2.0e-5
+    filename = strcat(filename,'_Fw1');
+else
+    filename = strcat(filename,'_Fw2');
+end
+
+if patch_s==0;     % weak_patch parameter -- 0==no patch ; 1==patch considered
+    filename = strcat(filename,'_WP0');
+else
+    filename = strcat(filename,'_WP1');
+end
+filename = strcat(filename,'_');
+filename = strcat(filename,string(numLoops));
+filename = strcat(filename,'.txt');
+
+save(filename,'Diffs','-ascii','-tabs')
 toc
 %save 2016-12-07_SmoothFix4ExpParams_400_1000_1000_1E-5_200neV
 %finalizePlots()
