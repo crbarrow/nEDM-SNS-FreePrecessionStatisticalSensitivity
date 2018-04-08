@@ -6,14 +6,14 @@ warning('off','all');
 global plotsOn; plotsOn = 0;
      
 %---- Fitting Method Settings -------------
-expFit_s = 1;    % exponential fitting parameter -- 1==single ; 2==double
+expFit_s = 2;    % exponential fitting parameter -- 1==single ; 2==double
 
 %---- Generating Variables ----------------
-f_walls_s = 2;   % f_walls parameter -- 1==1.0e-5 ; 2==2.0e-5
+f_walls_s = 1;   % f_walls parameter -- 1==1.0e-5 ; 2==2.0e-5
 
 %---- Fitting Variable Loops ---- !!!! Values Set at Loops !!!! ----
 phi0Loops = 1;    % phi0 for loops on/off 1/0 --       % phi0 parameter -- 0==free ; 1==fixed value
-T_wallsLoops = 0; % tau_walls for loops on/off 1/0 --  % Tau_walls parameter -- 0==(E)dependent ; 1==single valued
+T_wallsLoops = 1; % tau_walls for loops on/off 1/0 --  % Tau_walls parameter -- 0==(E)dependent ; 1==single valued
 patchLoops = 1;   % weak patch for loops on/off 1/0 -- % weak_patch parameter -- 0==no patch ; 1==patch considered
 
 %--- operating parameters 
@@ -83,7 +83,7 @@ t_width = 20E-3; %[s]
 
 % ---- 'for loops' settings and values ----
 %%%% NUMLOOPS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-numLoops = 99;
+numLoops = 104;
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 loopCount = (phi0Loops+1)*(T_wallsLoops+1)*(patchLoops+1);
 doneRes = 100/(numLoops*loopCount);
@@ -91,23 +91,29 @@ phi0Range = (1:phi0Loops+1);
 TwallsRange = (1:T_wallsLoops+1);
 WP_Range = (1:patchLoops+1);
 
+%%%% Data storage matrices
 D_f_LS = zeros([1 numLoops]);D_f_RLS = zeros([1 numLoops]);D_f_MLE = zeros([1 numLoops]);
 D_phi_LS = zeros([1 numLoops]);D_phi_RLS = zeros([1 numLoops]);D_phi_MLE = zeros([1 numLoops]);
 D_tau1_LS = zeros([1 numLoops]);D_tau1_RLS = zeros([1 numLoops]);D_tau1_MLE = zeros([1 numLoops]);
 D_tau2_LS = zeros([1 numLoops]);D_tau2_RLS = zeros([1 numLoops]);D_tau2_MLE = zeros([1 numLoops]);
-S_f_LS = zeros([1 numLoops]);S_f_RLS = zeros([1 numLoops]);S_f_MLE = zeros([1 numLoops]);
+S_f_LS = zeros([1 numLoops]);S_f_RLS = zeros([1 numLoops]);S_f_MLEhi = zeros([1 numLoops]);S_f_MLElow = zeros([1 numLoops]);
 LStime = zeros([1 numLoops]);RLStime = zeros([1 numLoops]);MLEtime = zeros([1 numLoops]);
+Chi2LS = zeros([1 numLoops]);Chi2RLS = zeros([1 numLoops]);Chi2MLE = zeros([1 numLoops]);
 
 tic
-for i = phi0Range
+
+%%%% Begin Loops %%%%
+for i = phi0Range % phi0 fixed or free to be fitted
     phi0_s = (i-1);
-    iProg = (patchLoops+1)*(T_wallsLoops+1)*100/loopCount*(i-1);   
-    for ii = WP_Range
+    iProg = (patchLoops+1)*(T_wallsLoops+1)*100/loopCount*(i-1); % feeds "progress" which tracks code completion 
+    for ii = WP_Range % weak patch is "on" or "off"
         patch_s = (ii-1);
-        iiProg = (T_wallsLoops+1)*100/loopCount*(ii-1);
-        for j = TwallsRange
+        iiProg = (T_wallsLoops+1)*100/loopCount*(ii-1); % feeds "progress" which tracks code completion
+        for j = TwallsRange % tau_walls is fixed (usually 2000) or energy dependent
             tau_walls_s = (j-1);
-            jProg = 100/loopCount*(j-1);
+            jProg = 100/loopCount*(j-1); % feeds "progress" which tracks code completion
+            %%%%% Define Tau_walls and Tau_buildup according to loop
+            %%%%% parameters 
             if patch_s==0
                 if tau_walls_s==0
                     tau_walls = 4*VCell*1e-6./(mubarWalls.*v*AWalls*1e-4);
@@ -126,32 +132,70 @@ for i = phi0Range
                 end
             end
             
- %%%%%%%%%%   Random (Poisson) Generation    %%%%%%%%%%%%           
-            for k = 1:numLoops
-            
-                tau_n3 = tau_n3_scan;
-                Tm = Tm_scan;
-                Tf = Tf_scan;
-                
-                N0E = PE.*tau_buildup.*(1-exp(-Tf./tau_buildup)); % N0(E)[UCN/neV]
-                tau_tot = (1/tau_beta+1/tau_n3+1./tau_walls).^-1; %average loss rate of UCNs
-                Gammatot = 1./tau_tot;
-                
-                n = round(Tm/t_width);
-                t = linspace(0,Tm,n);
-                
-                N0 = sum(N0E*dE);
-                clear NEt;
-                NEt = zeros([length(N0E),length(t)]);
-                for l = 1:length(N0E)
-                    for m = 1:length(t)
-                        NEt(l,m) = N0E(l).*exp(-Gammatot(l)*t(m)); %Z(E,t)
-                    end
+            %%%% Calculate mean for Monte Carlo data %%%%
+            tau_n3 = tau_n3_scan;
+            Tm = Tm_scan;
+            Tf = Tf_scan;
+
+            N0E = PE.*tau_buildup.*(1-exp(-Tf./tau_buildup)); % N0(E)[UCN/neV]
+            tau_tot = (1/tau_beta+1/tau_n3+1./tau_walls).^-1; %average loss rate of UCNs
+            Gammatot = 1./tau_tot;
+
+            n = round(Tm/t_width);
+            t = linspace(0,Tm,n);
+
+            N0 = sum(N0E*dE);
+            clear NEt;
+            NEt = zeros([length(N0E),length(t)]);
+            for l = 1:length(N0E)
+                for m = 1:length(t)
+                    NEt(l,m) = N0E(l).*exp(-Gammatot(l)*t(m)); %Z(E,t)
                 end
-        %%%%%%%%%   Random (Poisson) Light Generation   %%%%%%%%
-                Nt = sum(NEt,1)*dE;
-                y = (Nt.*(epsbeta/tau_beta + eps3/tau_n3.*(1-P3*Pn*cos(2*pi*f3n*t+phi0)))+BG)*t_width;
-                
+            end
+    
+            Nt = sum(NEt,1)*dE;
+            y = (Nt.*(epsbeta/tau_beta + eps3/tau_n3.*(1-P3*Pn*cos(2*pi*f3n*t+phi0)))+BG)*t_width;
+            
+            % establish model for light signal in equation FIDsignal
+            % initial guess for fitted coefficients in beta0
+            if expFit_s==1
+                %---- single exponential fit
+                if phi0_s==1
+                    FIDsignal = @(p,t) p(1).*exp(-t./p(2)).*(1-p(3)*cos(2*pi*p(4)*t + phi0))+abs(p(5));
+                    beta0 = [Nt(1)*t_width*((epsbeta/tau_beta)+(eps3/tau_n3)) 1/(1/tau_n3+1/880+1/tau0) P3*Pn*(eps3/tau_n3)/((epsbeta/tau_beta)+(eps3/tau_n3)) f3n BG*t_width];
+                    Coeffs = zeros([6 5]);
+                    CoeffsLS = zeros([numLoops 5]); CoeffsRLS = zeros([numLoops 5]); CoeffsMLE = zeros([numLoops 5]);
+                    ConIntLS = zeros([numLoops 5]); ConIntRLS = zeros([numLoops 5]); ConIntMLE = zeros([numLoops 5]);
+                else
+                    FIDsignal = @(p,t) p(1).*exp(-t./p(2)).*(1-p(3)*cos(2*pi*p(4)*t + p(6)))+abs(p(5));
+                    beta0 = [Nt(1)*t_width*((epsbeta/tau_beta)+(eps3/tau_n3)) 1/(1/tau_n3+1/880+1/tau0) P3*Pn*(eps3/tau_n3)/((epsbeta/tau_beta)+(eps3/tau_n3)) f3n BG*t_width phi0];
+                    Coeffs = zeros([6 6]);
+                    CoeffsLS = zeros([numLoops 6]); CoeffsRLS = zeros([numLoops 6]); CoeffsMLE = zeros([numLoops 6]);
+                    ConIntLS = zeros([numLoops 6]); ConIntRLS = zeros([numLoops 6]); ConIntMLE = zeros([numLoops 6]);
+                end
+            else
+                %--- double exponential decay fit
+                beta0_tau1 = 50; beta0_tau2 = 2000; % intial tau_walls guesses to satisfy double exp model
+                if phi0_s==1
+                    FIDsignal = @(p,t) (abs(p(1)).*exp(-t./abs(p(2)))+abs(p(3)).*exp(-t./abs(p(4)))).*(1-abs(p(5))*cos(2*pi*abs(p(6))*t + phi0))+abs(p(7));%p(3)).*exp(-t./abs(p(4)))).*(abs(p(5))+abs(p(6))*(1-abs(p(7))*cos(2*pi*abs(p(8))*t + phi0)))+abs(p(9));
+                    beta0 = [Nt(1)*t_width*((epsbeta/tau_beta)+(eps3/tau_n3)) 1/(1/tau_n3+1/880+1/beta0_tau1) Nt(1)*t_width*((epsbeta/tau_beta)+(eps3/tau_n3)) 1/(1/tau_n3+1/880+1/beta0_tau2) P3*Pn*(eps3/tau_n3)/((epsbeta/tau_beta)+(eps3/tau_n3)) f3n BG*t_width];
+                    %lb = zeros(1,length(beta0));ub = [50 1000 50 1000 5 10 5]; % bounds for mle function
+                    Coeffs = zeros([6 7]); 
+                    CoeffsLS = zeros([numLoops 7]); CoeffsRLS = zeros([numLoops 7]); CoeffsMLE = zeros([numLoops 7]);
+                    ConIntLS = zeros([numLoops 7]); ConIntRLS = zeros([numLoops 7]); ConIntMLE = zeros([numLoops 7]); 
+                else
+                    FIDsignal = @(p,t) (abs(p(1)).*exp(-t./abs(p(2)))+abs(p(3)).*exp(-t./abs(p(4)))).*(1-abs(p(5))*cos(2*pi*abs(p(6))*t + abs(p(8))))+abs(p(7));%p(3)).*exp(-t./abs(p(4)))).*(abs(p(5))+abs(p(6))*(1-abs(p(7))*cos(2*pi*abs(p(8))*t + phi0)))+abs(p(9));
+                    beta0 = [Nt(1)*t_width*((epsbeta/tau_beta)+(eps3/tau_n3)) 1/(1/tau_n3+1/880+1/beta0_tau1) Nt(1)*t_width*((epsbeta/tau_beta)+(eps3/tau_n3)) 1/(1/tau_n3+1/880+1/beta0_tau2) P3*Pn*(eps3/tau_n3)/((epsbeta/tau_beta)+(eps3/tau_n3)) f3n BG*t_width phi0];
+                    %lb = zeros(1,length(beta0));ub = [50 1000 50 1000 5 10 5 1];
+                    Coeffs = zeros([6 8]);
+                    CoeffsLS = zeros([numLoops 8]); CoeffsRLS = zeros([numLoops 8]); CoeffsMLE = zeros([numLoops 8]);
+                    ConIntLS = zeros([numLoops 8]); ConIntRLS = zeros([numLoops 8]); ConIntMLE = zeros([numLoops 8]);
+                end
+            end
+            
+            %%%%   Random (Poisson) Generation    %%%%%%%%%%%%           
+            for k = 1:numLoops
+                                           
                 data = random('Poisson',y);
                 dataErr = sqrt(data); %first guess at error assuming gaussian
                 dataErr(dataErr<=0)=1; %have to save the case when error = 0
@@ -159,19 +203,10 @@ for i = phi0Range
                 timeFit = toc;
                 
 %SS%%%%%%%%%%%%%     SINGLE Exponential Fitting     %%%%%%%%%%%%%%%%%%%%%%
-                if expFit_s==1
-                    %---- single exponential fit
-                    if phi0_s==1
-                        FIDsignal = @(p,t) p(1).*exp(-t./p(2)).*(1-p(3)*cos(2*pi*p(4)*t + phi0))+abs(p(5));
-                        beta0 = [Nt(1)*t_width*((epsbeta/tau_beta)+(eps3/tau_n3)) 1/(1/tau_n3+1/880+1/tau0) P3*Pn*(eps3/tau_n3)/((epsbeta/tau_beta)+(eps3/tau_n3)) f3n BG*t_width];
-                    else
-                        FIDsignal = @(p,t) p(1).*exp(-t./p(2)).*(1-p(3)*cos(2*pi*p(4)*t + p(6)))+abs(p(5));
-                        beta0 = [Nt(1)*t_width*((epsbeta/tau_beta)+(eps3/tau_n3)) 1/(1/tau_n3+1/880+1/tau0) P3*Pn*(eps3/tau_n3)/((epsbeta/tau_beta)+(eps3/tau_n3)) f3n BG*t_width phi0];
-                    end
-                    
-                %%%%%---- Least Squares fitting to single exponential --%%
-            % fitnlm without "Robust" option 
-            % fits Least Squares "linear"
+                if expFit_s==1         
+    %%%%%---- Least Squares fitting to single exponential --%%
+                % fitnlm without "Robust" option 
+                % fits Least Squares "linear"
                     lsmdl = fitnlm(t,data,FIDsignal,beta0);
             % delta_frequency after Least Squares fit 
             % f3n - 4th fitted coef.
@@ -186,87 +221,73 @@ for i = phi0Range
                     else
                         D_phi_LS(k) = 0;
                     end
+            % All coefficients and confidence intervals from fitting %Coeffs = zeros([6 7])
+                    CoeffsLS(k,:) = lsmdl.Coefficients.Estimate;
+                    ConIntLS(k,:) = lsmdl.Coefficients.SE;
+            % goodness of fit : X^2
+                    Chi2LS(k) = sum(((data-FIDsignal(lsmdl.Coefficients.Estimate,t))./dataErr).^2)/(length(t)-length(beta0));
+            % algorithm time tracking
                     LStime(k) = toc - timeFit;
-                                                          
+
                     %---- Recursive Least Squares fitting to single exponential
             % function defined below
                     [betaBest1,errBest1,chi2_1,betaBest2,errBest2,chi2_2,chi2_3] = recursiveLeastSquaresFitting(t,data,FIDsignal,beta0,dataErr);
             % saved values from RLS fitting
+                    % Sigma_f = std dev of freq estimates
                     S_f_RLS(k) = errBest2(4);
+                    % Delta_freq
                     D_f_RLS(k) = f3n - betaBest2(4);
+                    % Delta_tau_walls
                     D_tau1_RLS(k) = tau0 - 1/(1/betaBest2(2)-1/tau_beta-1/tau_n3);
+                    % Delta_phi0
                     if phi0_s==0
                         D_phi_RLS(k) = phi0 - betaBest2(6);
                     else
                         D_phi_RLS(k) = 0;
                     end
-                    
+            % All coefficients & confidence intervals from fitting
+                    CoeffsRLS(k,:) = betaBest2;
+                    ConIntRLS(k,:) = errBest2;        
+            % goodness of fit ; X^2
+                    Chi2RLS(k) = chi2_3;
+            % algorithm time tracking
                     RLStime(k) = toc - (timeFit+LStime(k));
-                    
+
                     %---- log likelihood (Poisson Nonlinear Regression)
             % negative log likelihood for FIDsignal
                     mynegloglik = @(beta,data1,cens,freq) -sum(log(poisspdf(data,FIDsignal(beta,t))));
             % mle fitting defined by Matlab mle
                     [phatMLE,pciMLE] = mle(data,'nloglf',mynegloglik,'start',beta0);
-                    phatMLE
-                    pciMLE
+                    phatMLE;
+                    pciMLE;
             % extracted values from Matlab mle
+                    % Delta_freq
                     D_f_MLE(k) = f3n - phatMLE(4);
-                    S_f_MLE(k) = phatMLE(4) - pciMLE(1,4);
+                    % Sigma_f = std dev of freq estimates
+                    S_f_MLEhi(k) = (phatMLE(4) - pciMLE(1,4))/2;  % pci gives 95% confidence
+                    S_f_MLElow(k) =  (pciMLE(2,4) - phatMLE(4))/2;% phat(i) - pci(i) gives 2x std dev
+                    % Delta_tau_walls
                     D_tau1_MLE(k) = tau0 - 1/(1/phatMLE(2)-1/tau_beta-1/tau_n3);
+                    % Delta_phi0
                     if phi0_s==0
                         D_phi_MLE(k) = phi0 - phatMLE(6);
                     else
                         D_phi_MLE(k) = 0;
                     end
+            % All coefficients & confidence intervals from fitting
+                    CoeffsMLE(k,:) = phatMLE;
+                    SEtemp = phatMLE - pciMLE(1,:);
+                    ConIntMLE(k,:) = SEtemp;
+            % goodness of fit : X^2
+                    Chi2MLE(k) = sum(((data-FIDsignal(phatMLE,t))./dataErr).^2)/(length(t)-length(beta0));
+            % algorithm time tracking
                     MLEtime(k) = toc - (timeFit+LStime(k)+RLStime(k));
-            
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%                    mynegloglik = @(beta) -sum(log(poisspdf(data,FIDsignal(beta,t))));
-%                    opts = optimset('fminsearch');
-%                    opts.MaxFunEvals = Inf;
-%                    opts.MaxIter = 10000;
-%                    betaHatML = fminsearch(mynegloglik,beta0,opts);
-%                    %disp('Poisson Nonlinear regression:')
-%                    %disp(['Coeff  =  ' num2str(betaHatML,'%0.8e  ')])
-%                    D_f_MLE(k) = f3n - betaHatML(4);
-%                    MLEresiduals = FIDsignal(betaHatML,t)-data;
-%                    [muMLE,SigmaMLE] = normfit(MLEresiduals);
-%                    S_f_MLE(k) = SigmaMLE;   %%%%%%%%%%%% sigma MLE %%%%%%%%%
-%                    D_tau1_MLE(k) = 2000 - 1/(1/betaHatML(2)-1/tau_beta-1/tau_n3);
-%                    if phi0_s==0
-%                        D_phi_MLE(k) = phi0 - betaHatML(6);
-%                    else
-%                        D_phi_MLE(k) = 0;
-%                    end
-%                    MLEtime(k) = toc - (timeFit+LStime(k)+RLStime(k));
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-                    
-                    %MLEnegloglik = @(params,d,cens,freq) -sum(data.*log(FIDsignal(params,t))-FIDsignal(params,t));
-                    %MLEnegloglik(beta0,data);
-                    %options = statset('MaxIter',10000, 'MaxFunEvals',Inf);
-                    %[phat pci] = mle(data,'nloglf',MLEnegloglik,'start',beta0,'alpha',0.37,'options',options);
-                    %disp('MLE Poisson Nonlinear regression:')
-                    %disp(['Coeff  =  ' num2str(phat,'%0.8e  ')])
-                    %disp(['Low    =  ' num2str(pci(1,:),'%0.8e  ')])
-                    %disp(['High   =  ' num2str(pci(2,:),'%0.8e  ')])
-                    
-%DD%%%%%%%%%%%%%     DOUBLE Exponential Fitting     %%%%%%%%%%%%%%%%%%%%%%%%
+
                 else
-                    %--- double exponential decay fit
-                    if phi0_s==1
-                        FIDsignal = @(p,t) (abs(p(1)).*exp(-t./abs(p(2)))+abs(p(3)).*exp(-t./abs(p(4)))).*(1-abs(p(5))*cos(2*pi*abs(p(6))*t + phi0))+abs(p(7));%p(3)).*exp(-t./abs(p(4)))).*(abs(p(5))+abs(p(6))*(1-abs(p(7))*cos(2*pi*abs(p(8))*t + phi0)))+abs(p(9));
-                        beta0 = [Nt(1)*t_width*((epsbeta/tau_beta)+(eps3/tau_n3)) 1/(1/tau_n3+1/880+2/tau0) Nt(1)*t_width*((epsbeta/tau_beta)+(eps3/tau_n3)) 1/(1/tau_n3+1/880+2/(3*tau0)) P3*Pn*(eps3/tau_n3)/((epsbeta/tau_beta)+(eps3/tau_n3)) f3n BG*t_width];
-                        lb = zeros(1,length(beta0));ub = [50 1000 50 1000 5 10 5]; % bounds for mle function
-                    else
-                        FIDsignal = @(p,t) (abs(p(1)).*exp(-t./abs(p(2)))+abs(p(3)).*exp(-t./abs(p(4)))).*(1-abs(p(5))*cos(2*pi*abs(p(6))*t + abs(p(8))))+abs(p(7));%p(3)).*exp(-t./abs(p(4)))).*(abs(p(5))+abs(p(6))*(1-abs(p(7))*cos(2*pi*abs(p(8))*t + phi0)))+abs(p(9));
-                        beta0 = [Nt(1)*t_width*((epsbeta/tau_beta)+(eps3/tau_n3)) 1/(1/tau_n3+1/880+2/tau0) Nt(1)*t_width*((epsbeta/tau_beta)+(eps3/tau_n3)) 1/(1/tau_n3+1/880+2/(3*tau0)) P3*Pn*(eps3/tau_n3)/((epsbeta/tau_beta)+(eps3/tau_n3)) f3n BG*t_width phi0];
-                        lb = zeros(1,length(beta0));ub = [50 1000 50 1000 5 10 5 1];
-                    end
-                        %warning('off','all');
-                    
-                    %---- Least Squares fitting to double exponential
-                    
+    %DD%%%%%%%%%%%%%     DOUBLE Exponential Fitting     %%%%%%%%%%%%%%%%%%%%%%%%
+                
+            %---- Least Squares fitting to double exponential
+
             % fitnlm without "Robust" option 
             % fits Least Squares "linear"
                     lsmdl = fitnlm(t,data,FIDsignal,beta0);
@@ -284,66 +305,70 @@ for i = phi0Range
                     else
                         D_phi_LS(k) = 0;
                     end
+            % All coefficients & confidence intervals from fitting
+                    CoeffsLS(k,:) = lsmdl.Coefficients.Estimate;
+                    ConIntLS(k,:) = lsmdl.Coefficients.SE;
+            % goodness of fit : X^2
+                    Chi2LS(k) = sum(((data-FIDsignal(lsmdl.Coefficients.Estimate,t))./dataErr).^2)/(length(t)-length(beta0));
+            % algorithm time tracking
                     LStime(k) = toc - timeFit;
-                    
+
                     %---- Recursive Least Squares fitting to double exponential
                     [betaBest1,errBest1,chi2_1,betaBest2,errBest2,chi2_2,chi2_3] = recursiveLeastSquaresFitting(t,data,FIDsignal,beta0,dataErr);
+                    % Sigma = std dev for freq estimation from algorithm
                     S_f_RLS(k) = errBest2(6);
+                    % Delta_freq
                     D_f_RLS(k) = f3n - betaBest2(6);
+                    % Delta_tau_walls
                     D_tau1_RLS(k) = tau0 - 1/(1/betaBest2(2)-1/tau_beta-1/tau_n3);
                     D_tau2_RLS(k) = tau0 - 1/(1/betaBest2(4)-1/tau_beta-1/tau_n3);
+                    % Delta_phi0
                     if phi0_s==0
                         D_phi_RLS(k) = phi0 - betaBest2(8);
                     else
                         D_phi_RLS(k) = 0;
                     end
-                    %disp([num2str(tau_n3) ', ' num2str(Tm) ', ' num2str(Tf) ', ' num2str(sigma_f,'%8.2e') ', ' num2str(diff_f_RLS,'%8.2e') ', ' num2str(chi2_3,'%8.4f') ', ' num2str(finalSensitivity(sigma_f,Tm,Tf,Td,Efield),'%8.2e')]);
+            % All coefficients & confidence intervals from fitting
+                    CoeffsRLS(k,:) = betaBest2;
+                    ConIntRLS(k,:) = errBest2;
+            % goodness of fit ; X^2
+                    Chi2RLS(k) = chi2_3;
+            % algorithm time tracking
                     RLStime(k) = toc - (timeFit+LStime(k));
-                    
+
                     %---- log likelihood (Poisson Nonlinear Regression)
- %%% MLE currently not working for Double Exp model
             % negative log likelihood for FIDsignal
                     mynegloglik = @(beta,data1,cens,freq) -sum(log(poisspdf(data,FIDsignal(beta,t))));
             % mle fitting defined by Matlab mle
                     [phatMLE,pciMLE] = mle(data,'nloglf',mynegloglik,'start',beta0); %,'LowerBound',lb,'UpperBound',ub);
-                    phatMLE
-                    pciMLE
+                    phatMLE;
+                    pciMLE;
             % extracted values from Matlab mle
+                    % Delta_freq
                     D_f_MLE(k) = f3n - phatMLE(6);
-                    S_f_MLE(k) = phatMLE(6) - pciMLE(1,6);
+                    % Sigma = std dev calculated by mle algorithm
+                    S_f_MLEhi(k) = (phatMLE(6) - pciMLE(1,6))/2; % pci gives 95% confidence interval
+                    S_f_MLElow(k) =  (pciMLE(2,6) - phatMLE(6))/2; % so phat(i) - pci(i) gives 2x std dev
+                    % Delta_tau_walls
                     D_tau1_MLE(k) = tau0 - 1/(1/phatMLE(2)-1/tau_beta-1/tau_n3);
                     D_tau2_MLE(k) = tau0 - 1/(1/phatMLE(4)-1/tau_beta-1/tau_n3);
+                    % Delta_phi0
                     if phi0_s==0
                         D_phi_MLE(k) = phi0 - phatMLE(8);
                     else
                         D_phi_MLE(k) = 0;
                     end
+            % All coefficients & confidence intervals from fitting
+                    CoeffsMLE(k,:) = phatMLE;
+                    SEtemp = phatMLE - pciMLE(1,:);
+                    ConIntMLE(k,:) = SEtemp;
+            % goodness of fit : X^2
+                    Chi2MLE(k) = sum(((data-FIDsignal(phatMLE,t))./dataErr).^2)/(length(t)-length(beta0));
+            % algorithm time tracking
                     MLEtime(k) = toc - (timeFit+LStime(k)+RLStime(k));
-                    
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%                    mynegloglik = @(beta) -sum(log(poisspdf(data,FIDsignal(beta,t))));
-%                    opts = optimset('fminsearch');
-%                    opts.MaxFunEvals = Inf;
-%                    opts.MaxIter = 10000;
-%                    betaHatML = fminsearch(mynegloglik,beta0,opts);
-%                    %disp('Poisson Nonlinear regression:')
-%                    %disp(['Coeff  =  ' num2str(betaHatML,'%0.8e  ')])
-%                    D_f_MLE(k) = f3n - betaHatML(6);
-%                    MLEresiduals = FIDsignal(betaHatML,t)-data;
-%                    [muMLE,SigmaMLE] = normfit(MLEresiduals);
-%                    S_f_MLE(k) = SigmaMLE;   %%%%%%%%%%%% sigma MLE %%%%%%%%%
-%                    D_tau1_RLS(k) = 2000 - 1/(1/betaHatML(2)-1/tau_beta-1/tau_n3);
-%                    D_tau2_RLS(k) = 2000 - 1/(1/betaHatML(4)-1/tau_beta-1/tau_n3);
-%                    if phi0_s==0
-%                        D_phi_MLE(k) = phi0 - betaHatML(8);
-%                    else
-%                        D_phi_MLE(k) = 0;
-%                    end
-%                    MLEtime(k) = toc - (timeFit+LStime(k)+RLStime(k));
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-                    
-%DWS%DWS%%%%%%%%%   SMOOTHED DOUBLE Exponential fitting  %%%%%%%%%%%%%%%%
+
+    %DWS%DWS%%%%%%%%%   SMOOTHED DOUBLE Exponential fitting  %%%%%%%%%%%%%%%%
                     %--- for double exponential decay fit - smoothing first - fix all 4 double exp parameters
                     %             disp('Double-exponential: smooth first, fixed all 4 double exponential parameters:')
                     %             DE = smoothDataAndDoubleExpFit(t,data,tau_n3);
@@ -356,7 +381,7 @@ for i = phi0Range
                     %             diff_f_RLS_SmoothFix4ExpParams(i) = diff_f_RLS;
                     %             disp([num2str(tau_n3) ', ' num2str(Tm) ', ' num2str(Tf) ', ' num2str(sigma_f,'%8.2e') ', ' num2str(diff_f_RLS,'%8.2e') ', ' num2str(chi2_3,'%8.4f') ', ' num2str(finalSensitivity(sigma_f,Tm,Tf,Td,Efield),'%8.2e')]);
                     %
-                    
+
                     %--- for double exponential decay fit - smoothing first - fix all 2 double exp parameters
                     %disp('Double-exponential: smooth first, fixed 2 x time constants, leave free 2x amplitudes: \n')
                     %DE = smoothDataAndDoubleExpFit(t,data,tau_n3);
@@ -365,80 +390,70 @@ for i = phi0Range
                     %[betaBest1,errBest1,chi2_1,betaBest2,errBest2,chi2_2,chi2_3] = recursiveLeastSquaresFitting(t,data,FIDsignal,beta0,dataErr);
                     %sigma_f = errBest2(6);
                     %diff_f_RLS = f3n - betaBest2(6);
-                    %disp([num2str(tau_n3) ', ' num2str(Tm) ', ' num2str(Tf) ', ' num2str(sigma_f,'%8.2e') ', ' num2str(diff_f_RLS,'%8.2e') ', ' num2str(chi2_2,'%8.4f') ', ' num2str(finalSensitivity(sigma_f,Tm,Tf,Td,Efield),'%8.2e')]);
-                    
-                    
-                    %--- from Filipone2009: (90% CL) sigma_d = h * 1.64 * sigma_f / (4* Efield) * sqrt(2)
+
+                    % percent done
                 end
-                
-                % percent done
                 progress = iProg+iiProg+jProg + doneRes*k
-                
             end
+                
 %%%%%% DATA to be saved  %%%%%%
-            %D_f_'fit' ; & D_phi_'fit' & D_tau1_'fit' & D_tau2_'fit'
-            % tau1 & tau2 are fits for 2 coefficients in beta0
             Diffs = [transpose(D_f_LS),transpose(D_f_RLS),transpose(D_f_MLE),transpose(D_phi_LS),transpose(D_phi_RLS),transpose(D_phi_MLE),transpose(D_tau1_LS),transpose(D_tau1_RLS),transpose(D_tau1_MLE),transpose(D_tau2_LS),transpose(D_tau2_RLS),transpose(D_tau2_MLE)];
+            Coeffs(1,:) = mean(CoeffsLS); Coeffs(2,:) = mean(ConIntLS); Coeffs(3,:) = mean(CoeffsRLS); Coeffs(4,:) = mean(ConIntRLS); Coeffs(5,:) = mean(CoeffsMLE); Coeffs(6,:) = mean(ConIntMLE); 
+            Sigmas = [transpose(S_f_LS) transpose(S_f_RLS) transpose(S_f_MLEhi) transpose(S_f_MLElow) transpose(LStime) transpose(RLStime) transpose(MLEtime)];
+            Chi2s = [transpose(Chi2LS) transpose(Chi2RLS) transpose(Chi2MLE)];
             times = [mean(LStime),mean(RLStime),mean(MLEtime)];
-            Sigmas = [mean(S_f_LS) mean(S_f_RLS) mean(S_f_MLE) std(S_f_LS) std(S_f_RLS) std(S_f_MLE) times];
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%            
-            
             % FILENAME %
-            % ---- save data - 3 arrays of diffs - LS vs RLS vs MLE - sized by number
-            %      of loops, k
+            % ---- save data - size ~ # of loops, k
             
             filename = 'diffs';
             filenameSig = 'sigmas';
+            filenameCoeffs = 'coeffs';
+            filenameChi2s = 'chi2s';
+            %%%%%%%%%%%
             if expFit_s==1      % exponential fitting parameter -- 1==single ; 2==double
-                filename = strcat(filename,'_Ex1');
-                filenameSig = strcat(filenameSig,'_Ex1');
+                filetag = '_Ex1';
             else
-                filename = strcat(filename,'_Ex2');
-                filenameSig = strcat(filenameSig,'_Ex2');
+                filetag = '_Ex2';
             end
-            
+            %%%%%%%%%%
             if phi0_s==1      % phi0 parameter -- 0==free ; 1==fixed value
-                filename = strcat(filename,'_Ph1');
-                filenameSig = strcat(filenameSig,'_Ph1');
+                filetag = strcat(filetag,'_Ph1');
             else
-                filename = strcat(filename,'_Ph0');
-                filenameSig = strcat(filenameSig,'_Ph0');
+                filetag = strcat(filetag,'_Ph0');
             end
-            
+            %%%%%%%%%
             if tau_walls_s==0 % Tau_walls parameter -- 0==(E)dependent ; 1==single valued
-                filename = strcat(filename,'_Tw0');
-                filenameSig = strcat(filenameSig,'_Tw0');
+                filetag = strcat(filetag,'_Tw0');
             else
-                filename = strcat(filename,'_Tw1');
-                filenameSig = strcat(filenameSig,'_Tw1');
+                filetag = strcat(filetag,'_Tw1');
             end
-            
+            %%%%%%%%
             if f_walls_s==1   % f_walls parameter -- 1==1.0e-5 ; 2==2.0e-5
-                filename = strcat(filename,'_Fw1');
-                filenameSig = strcat(filenameSig,'_Fw1');
+                filetag = strcat(filetag,'_Fw1');
             else
-                filename = strcat(filename,'_Fw2');
-                filenameSig = strcat(filenameSig,'_Fw2');
+                filetag = strcat(filetag,'_Fw2');
             end
-            
+            %%%%%%%%%
             if patch_s==0     % weak_patch parameter -- 0==no patch ; 1==patch considered
-                filename = strcat(filename,'_WP0');
-                filenameSig = strcat(filenameSig,'_WP0');
+                filetag = strcat(filetag,'_WP0');
             else
-                filename = strcat(filename,'_WP1');
-                filenameSig = strcat(filenameSig,'_WP1');
+                filetag = strcat(filetag,'_WP1');
             end
-            filename = strcat(filename,'_');
-            filename = strcat(filename,num2str(numLoops));
-            filename = strcat(filename,'.txt');
-            
-            filenameSig = strcat(filenameSig,'_');
-            filenameSig = strcat(filenameSig,num2str(numLoops));
-            filenameSig = strcat(filenameSig,'.txt');
+            filetag = strcat(filetag,'_');
+            filetag = strcat(filetag,num2str(numLoops));
+            filetag = strcat(filetag,'.txt');
+            %%%%%%%%%%
+            filename = strcat(filename,filetag);
+            filenameSig = strcat(filenameSig,filetag);
+            filenameCoeffs = strcat(filenameCoeffs,filetag);
+            filenameChi2s = strcat(filenameChi2s,filetag);
             
 %%%%%%%%%%%%%  SAVE   %%%%%%%%%%%%%%
             save(filename,'Diffs','-ascii','-tabs')
             save(filenameSig,'Sigmas','-ascii','-tabs')
+            save(filenameCoeffs,'Coeffs','-ascii','-tabs')
+            save(filenameChi2s,'Chi2s','-ascii','-tabs')
         end
     end
 end
