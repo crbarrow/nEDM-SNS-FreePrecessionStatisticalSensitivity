@@ -23,7 +23,11 @@ for i = 1:numel(filenames)
         % frequencies produced in the fitting routines
         f_LS = M(:,1);f_RLS = M(:,2);f_MLE = M(:,3);
         
-        S = dlmread(SigmaFile,'\t');
+        % Number of members in plotted populations
+        % (defined by numLoops in data-generating code)
+        N = length(M(:,1));
+        
+        S = dlmread(SigmaFile,'\t',[0 0 (N-1) 3]).*1.0e06;
         % loads info from 'sigmas_*'
         figure(1); clf; hold all; box on; grid on;set(figure(1), 'Visible', 'off');
 
@@ -58,14 +62,14 @@ for i = 1:numel(filenames)
         [mu_LS,sigma_LS,muci,sigmaci] = normfit(hist_diff_f_LS.Data);
         sigma_LS;
         %%% pm_* = confidence interval for Mean of plotted population
-        pm_LS = sigma_LS/(sqrt(length(M(:,1))));
+        pm_LS = sigma_LS/(sqrt(N));
         % repeated for LS, RLS, and MLE
         [mu_RLS,sigma_RLS,muci,sigmaci] = normfit(hist_diff_f_RLS.Data);
         sigma_RLS;
-        pm_RLS = sigma_RLS/(sqrt(length(M(:,1))));
+        pm_RLS = sigma_RLS/(sqrt(N));
         [mu_ML,sigma_ML,muci,sigmaci] = normfit(hist_diff_f_MLE.Data);
         sigma_ML;
-        pm_ML = sigma_ML/(sqrt(length(M(:,1))));
+        pm_ML = sigma_ML/(sqrt(N));
 
         % create a multiplier that will scale the Gaussian line
         % to the plotted data points
@@ -87,21 +91,21 @@ for i = 1:numel(filenames)
         %set(gca,'xscale','log');    % set x-axis to logarithmic scaling
 
         % create matrix for extracted MEAN, SE and STD DEV info
-        Sigmas = zeros(2,9);
+        Sigmas = zeros(2,10);
         %%% STD - standard deviation of population  
-        Sigmas(1,2) = sigma_LS; Sigmas(1,5) = sigma_RLS; Sigmas(1,8) = sigma_ML;
+        Sigmas(1,2) = sigma_LS; Sigmas(1,5) = sigma_RLS; Sigmas(1,9) = sigma_ML;
         %%% SE - standard error from fitting algorithm
         % usually averaged
         % note on MLE: algorithm gives a 95% confidence interval rather
         % than a sigma or std dev, which corresponds to 2 sigmas, so S(3)
         % must be divided by 2 to reflect a "sigma" value
-        Sigmas(1,1) = S(1)*1.0e06; Sigmas(1,4) = S(2)*1.0e06; Sigmas(1,7) = (S(3)/2)*1.0e06;
+        Sigmas(1,1) = mean(S(:,1)); Sigmas(1,4) = mean(S(:,2)); Sigmas(1,7) = mean(S(:,3)); Sigmas(1,8) = mean(S(:,4));
         %%% confidence interval for SE
-        Sigmas(2,1) = S(4)*1.0e06; Sigmas(2,4) = S(5)*1.0e06; Sigmas(2,7) = S(6)*1.0e06;
+        Sigmas(2,1) = std(S(:,1))/(sqrt(N)); Sigmas(2,4) = std(S(:,2))/(sqrt(N)); Sigmas(2,7) = std(S(:,3))/(sqrt(N)); Sigmas(2,8) = std(S(:,4))/(sqrt(N));
         %%% Mean from plotted population
-        Sigmas(1,3) = mu_LS; Sigmas(1,6) = mu_RLS; Sigmas(1,9) = mu_ML;
+        Sigmas(1,3) = mu_LS; Sigmas(1,6) = mu_RLS; Sigmas(1,10) = mu_ML;
         %%% Confidence interval of plotted population Mean
-        Sigmas(2,3) = pm_LS; Sigmas(2,6) = pm_RLS; Sigmas(2,9) = pm_ML;
+        Sigmas(2,3) = pm_LS; Sigmas(2,6) = pm_RLS; Sigmas(2,10) = pm_ML;
         % display Sigmas on Command window
         Sigmas
 
